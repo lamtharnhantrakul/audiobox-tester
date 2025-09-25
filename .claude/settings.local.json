@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone:*)",
+      "Bash(docker build:*)",
+      "Bash(docker:*)",
+      "Bash(chmod:*)",
+      "Bash(python test:*)",
+      "Bash(python3:*)",
+      "Bash(./run_audiobox.sh:*)",
+      "Bash(./run_single_audio.sh:*)",
+      "Bash(./run_test_directory.sh)",
+      "Bash(grep:*)",
+      "Bash(./run_test_directory.sh:*)",
+      "Bash(./run_single_file.sh:*)",
+      "Bash(timeout:*)",
+      "Bash(./cleanup.sh:*)",
+      "Bash(./run_test_files.sh:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
