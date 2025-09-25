@@ -4,32 +4,66 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Docker-based wrapper for Meta's audiobox-aesthetics model that analyzes audio/video files for aesthetic metrics. The project provides a containerized solution to run audio analysis on media files with 4 aesthetic dimensions: Content Enjoyment (CE), Content Usefulness (CU), Production Complexity (PC), and Production Quality (PQ).
+This is a Docker-based audio analysis toolkit that provides two complementary approaches to audio assessment:
+
+1. **Audiobox-Aesthetics**: Meta's model analyzing 4 aesthetic dimensions - Content Enjoyment (CE), Content Usefulness (CU), Production Complexity (PC), and Production Quality (PQ)
+2. **SQUIM**: TorchAudio's speech quality assessment providing objective metrics (STOI, PESQ, SI-SDR) and subjective metrics (MOS)
+
+Both systems provide containerized solutions for analyzing audio/video files with automatic format conversion.
 
 ## Architecture
 
-- **Entry point scripts**: `run_single_file.sh` and `run_test_files.sh` - Shell scripts that build and run the Docker container
-- **Docker container**: Contains the audiobox-aesthetics Python package and dependencies
-- **Python wrapper**: `process_audio.py` - Custom wrapper with FFmpeg-based fallback for unsupported formats
+### Unified Docker Architecture
+- **Single container**: Contains both audiobox-aesthetics and SQUIM dependencies
+- **Base image**: Python 3.10-slim with PyTorch, TorchAudio, and audio processing tools
+- **Flexible entrypoint**: Default audiobox-aesthetics, override for SQUIM processing
+
+### Audiobox-Aesthetics System
+- **Entry point scripts**: `run_audiobox.sh` and `run_test_directory.sh` - Shell scripts for aesthetic analysis
+- **Python wrapper**: `process_audiobox.py` - Custom wrapper with FFmpeg-based fallback for unsupported formats
 - **Core model**: Located in `audiobox-aesthetics/` subdirectory (Meta's open-source model with WavLM backbone)
+
+### SQUIM Speech Quality System
+- **Entry point scripts**: `run_squim_single_file.sh` and `run_squim_directory.sh` - Shell scripts for speech quality analysis
+- **Python wrapper**: `process_squim.py` - SQUIM processor with automatic format conversion
+- **Core models**: TorchAudio's SQUIM_OBJECTIVE and SQUIM_SUBJECTIVE pretrained models
+
+### Common Features
 - **Format compatibility**: Automatic conversion system handles both audio and video files
 - **Input/Output**: Processes media files via Docker volume mounts, outputs formatted text results
 
 ## Key Commands
 
-### Primary Usage
+### Audiobox-Aesthetics Commands
 ```bash
-# Process single audio/video file
-./run_single_file.sh /path/to/media.mp4 [output_filename.txt]
+# Process single audio/video file for aesthetic metrics
+./run_audiobox.sh /path/to/media.mp4 [output_filename.txt]
 
-# Process all files in test directory
-./run_test_files.sh [output_filename.txt]
+# Process all files in test directory for aesthetic analysis
+./run_test_directory.sh [output_filename.txt]
 
 # Examples
-./run_single_file.sh test_files/song.aiff my_results.txt
-./run_single_file.sh test_files/video.mp4 video_analysis.txt
-./run_test_files.sh test_results.txt
+./run_audiobox.sh test_files/song.aiff my_aesthetics.txt
+./run_audiobox.sh test_files/video.mp4 video_aesthetics.txt
+./run_test_directory.sh aesthetics_results.txt
+```
 
+### SQUIM Speech Quality Commands
+```bash
+# Process single audio/video file for speech quality metrics
+./run_squim_single_file.sh /path/to/speech.wav [output_filename.txt]
+
+# Process all files in test directory for speech quality analysis
+./run_squim_directory.sh [output_filename.txt]
+
+# Examples
+./run_squim_single_file.sh test_files/speech.wav speech_quality.txt
+./run_squim_single_file.sh test_files/interview.mp4 interview_quality.txt
+./run_squim_directory.sh squim_results.txt
+```
+
+### Maintenance Commands
+```bash
 # Clean up generated test files and artifacts
 ./cleanup.sh                    # Standard cleanup
 ./cleanup.sh --dry-run          # Preview cleanup
@@ -38,16 +72,23 @@ This is a Docker-based wrapper for Meta's audiobox-aesthetics model that analyze
 
 ### Manual Docker Usage
 ```bash
-# Build container
-docker build -t audiobox-aesthetics .
+# Build unified container (supports both audiobox-aesthetics and SQUIM)
+docker build -t audiobox-squim .
 
-# Process directory manually
+# Audiobox-Aesthetics (default entrypoint)
 docker run --rm \
   -v "/path/to/media:/app/input:ro" \
   -v "$(pwd):/app/output" \
-  audiobox-aesthetics /app/input "/app/output/results.txt"
+  audiobox-squim /app/input "/app/output/aesthetics_results.txt"
 
-# Build test container
+# SQUIM Speech Quality (override entrypoint)
+docker run --rm \
+  --entrypoint python \
+  -v "/path/to/media:/app/input:ro" \
+  -v "$(pwd):/app/output" \
+  audiobox-squim /app/process_squim.py /app/input "/app/output/squim_results.txt"
+
+# Test containers
 docker build -f Dockerfile.test -t audiobox-aesthetics-test .
 ```
 
@@ -64,7 +105,7 @@ audio-aes input.jsonl --batch-size 100 --remote --array 5 --job-dir $HOME/slurm_
 
 1. **Shell script** creates temporary directories and handles file path resolution
 2. **Docker container** mounts input (read-only) and output directories
-3. **process_audio.py** orchestrates processing with automatic format handling:
+3. **process_audiobox.py** orchestrates processing with automatic format handling:
    - Displays real-time progress bar with file count and ETA
    - Scans for supported media files
    - **Video files**: Extracts audio using FFmpeg with progress notifications
@@ -82,20 +123,42 @@ audio-aes input.jsonl --batch-size 100 --remote --array 5 --job-dir $HOME/slurm_
 
 ## Core Dependencies
 
+### Common Requirements
 - Docker Desktop (required to be running)
 - Python 3.10 (container)
 - PyTorch 2.2+, torchaudio
 - FFmpeg (handles all audio/video format conversion)
-- soundfile, tqdm (for audio processing and progress display)
+- tqdm (for progress display)
+
+### Audiobox-Aesthetics Specific
+- soundfile (for audio processing)
 - audiobox-aesthetics package (Meta's model)
+
+### SQUIM Specific
+- TorchAudio 2.6.0+ (includes SQUIM models)
+- Pre-trained SQUIM models (auto-downloaded from TorchAudio)
 
 ## Model Architecture
 
+### Audiobox-Aesthetics Model
 - **Backbone**: WavLM (Microsoft's audio foundation model)
 - **Multi-output head**: Separate prediction layers for CE, CU, PC, PQ metrics
 - **Processing**: Audio resampled to 16kHz mono, analyzed in 10-second overlapping windows
 - **Checkpoint**: Auto-downloads from HuggingFace (`facebook/audiobox-aesthetics`) on first run
 - **Device support**: CUDA, MPS (Apple Silicon), CPU fallback
+
+### SQUIM Speech Quality Models
+- **Objective Model**: Predicts STOI, PESQ, and SI-SDR metrics without reference audio
+- **Subjective Model**: Predicts MOS (Mean Opinion Score) for overall quality assessment
+- **Processing**: Audio resampled to 16kHz mono, minimum 0.5-second duration required
+- **Checkpoints**: Pre-trained TorchAudio models (`SQUIM_OBJECTIVE`, `SQUIM_SUBJECTIVE`)
+- **Device support**: CUDA, MPS (Apple Silicon), CPU fallback
+
+#### SQUIM Metrics Explained
+- **STOI** (0-1): Speech Intelligibility - higher values indicate better intelligibility
+- **PESQ** (1-4.5): Perceptual Evaluation of Speech Quality - higher values indicate better quality
+- **SI-SDR** (dB): Scale-Invariant Signal-to-Distortion Ratio - higher values indicate less distortion
+- **MOS** (1-5): Mean Opinion Score - subjective quality rating, higher values indicate better perceived quality
 
 ## Format Conversion System
 
@@ -135,7 +198,7 @@ The system includes robust automatic format conversion:
 
 ## Output Format
 
-Results are saved as formatted text files:
+### Audiobox-Aesthetics Results
 ```
 Audio File Aesthetics Metrics
 ==================================================
@@ -149,6 +212,30 @@ Metrics:
   Production Quality (PQ): 7.220
 
 ------------------------------
+```
+
+### SQUIM Speech Quality Results
+```
+Speech Quality Assessment Results (SQUIM)
+==================================================
+
+File: example.wav
+Path: /app/input/example.wav
+Speech Quality Metrics:
+  STOI (Speech Intelligibility): 0.892
+  PESQ (Perceptual Quality): 3.247
+  SI-SDR (Signal Distortion): 12.845 dB
+  MOS (Mean Opinion Score): 4.132
+
+------------------------------
+
+Summary Statistics:
+====================
+Total files processed: 5
+Average STOI: 0.874
+Average PESQ: 3.182
+Average SI-SDR: 11.923 dB
+Average MOS: 4.067
 ```
 
 ## Progress Display

@@ -15,7 +15,14 @@
       "Bash(./run_single_file.sh:*)",
       "Bash(timeout:*)",
       "Bash(./cleanup.sh:*)",
-      "Bash(./run_test_files.sh:*)"
+      "Bash(./run_test_files.sh:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(mv:*)",
+      "WebFetch(domain:docs.pytorch.org)",
+      "Bash(./run_squim_single_file.sh:*)",
+      "Read(//Users/yaboihanoi/code/audiobox_test/**)"
     ],
     "deny": [],
     "ask": []

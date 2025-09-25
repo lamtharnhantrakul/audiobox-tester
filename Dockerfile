@@ -14,17 +14,19 @@ WORKDIR /app
 # Copy the audiobox-aesthetics repository
 COPY audiobox-aesthetics /app/audiobox-aesthetics
 
-# Install audio processing packages
-RUN pip install --no-cache-dir soundfile tqdm
+# Install common audio processing packages
+RUN pip install --no-cache-dir soundfile tqdm torch torchaudio
 
-# Install audiobox-aesthetics (includes torch and other ML dependencies)
+# Install audiobox-aesthetics (includes additional ML dependencies)
 RUN cd audiobox-aesthetics && pip install -e .
 
 # Create directories for input and output
 RUN mkdir -p /app/input /app/output
 
-# Copy our processing script
-COPY process_audio.py /app/
+# Copy both processing scripts
+COPY process_audiobox.py /app/
+COPY process_squim.py /app/
+RUN chmod +x /app/process_squim.py
 
-# Set the entrypoint
-ENTRYPOINT ["python", "/app/process_audio.py"]
+# Default entrypoint (can be overridden)
+ENTRYPOINT ["python", "/app/process_audiobox.py"]
