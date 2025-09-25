@@ -19,13 +19,13 @@ Both systems provide containerized solutions for analyzing audio/video files wit
 - **Flexible entrypoint**: Default audiobox-aesthetics, override for SQUIM processing
 
 ### Audiobox-Aesthetics System
-- **Entry point scripts**: `run_audiobox.sh` and `run_test_directory.sh` - Shell scripts for aesthetic analysis
+- **Entry point scripts**: `run_audiobox_single_file.sh` and `run_audiobox_directory.sh` - Shell scripts for aesthetic analysis
 - **Python wrapper**: `process_audiobox.py` - Custom wrapper with FFmpeg-based fallback for unsupported formats
 - **Core model**: Located in `audiobox-aesthetics/` subdirectory (Meta's open-source model with WavLM backbone)
 
 ### SQUIM Speech Quality System
 - **Entry point scripts**: `run_squim_single_file.sh` and `run_squim_directory.sh` - Shell scripts for speech quality analysis
-- **Python wrapper**: `process_squim.py` - SQUIM processor with automatic format conversion
+- **Python wrapper**: `process_squim.py` - SQUIM processor with automatic format conversion and synthetic NMR
 - **Core models**: TorchAudio's SQUIM_OBJECTIVE and SQUIM_SUBJECTIVE pretrained models
 
 ### Common Features
@@ -37,15 +37,15 @@ Both systems provide containerized solutions for analyzing audio/video files wit
 ### Audiobox-Aesthetics Commands
 ```bash
 # Process single audio/video file for aesthetic metrics
-./run_audiobox.sh /path/to/media.mp4 [output_filename.txt]
+./run_audiobox_single_file.sh /path/to/media.mp4 [output_filename.txt]
 
 # Process all files in test directory for aesthetic analysis
-./run_test_directory.sh [output_filename.txt]
+./run_audiobox_directory.sh [output_filename.txt]
 
 # Examples
-./run_audiobox.sh test_files/song.aiff my_aesthetics.txt
-./run_audiobox.sh test_files/video.mp4 video_aesthetics.txt
-./run_test_directory.sh aesthetics_results.txt
+./run_audiobox_single_file.sh test_files/song.aiff my_aesthetics.txt
+./run_audiobox_single_file.sh test_files/video.mp4 video_aesthetics.txt
+./run_audiobox_directory.sh aesthetics_results.txt
 ```
 
 ### SQUIM Speech Quality Commands
@@ -57,7 +57,7 @@ Both systems provide containerized solutions for analyzing audio/video files wit
 ./run_squim_directory.sh [output_filename.txt]
 
 # Examples
-./run_squim_single_file.sh test_files/speech.wav speech_quality.txt
+./run_squim_single_file.sh test_files/speech_hanoi.mp3 speech_quality.txt
 ./run_squim_single_file.sh test_files/interview.mp4 interview_quality.txt
 ./run_squim_directory.sh squim_results.txt
 ```
@@ -88,7 +88,7 @@ docker run --rm \
   -v "$(pwd):/app/output" \
   audiobox-squim /app/process_squim.py /app/input "/app/output/squim_results.txt"
 
-# Test containers
+# Test containers (legacy)
 docker build -f Dockerfile.test -t audiobox-aesthetics-test .
 ```
 
@@ -160,6 +160,12 @@ audio-aes input.jsonl --batch-size 100 --remote --array 5 --job-dir $HOME/slurm_
 - **SI-SDR** (dB): Scale-Invariant Signal-to-Distortion Ratio - higher values indicate less distortion
 - **MOS** (1-5): Mean Opinion Score - subjective quality rating, higher values indicate better perceived quality
 
+#### SQUIM Implementation Notes
+- **Non-Matching Reference (NMR)**: SQUIM_SUBJECTIVE requires a reference audio for MOS calculation
+- **Synthetic NMR**: Uses generated multi-frequency tone (800Hz, 1200Hz, 2400Hz) as default reference
+- **MOS Interpretation**: MOS scores may appear lower due to synthetic reference; focus on relative comparisons
+- **Reference-Free Objective Metrics**: STOI, PESQ, and SI-SDR are reference-free and provide reliable absolute scores
+
 ## Format Conversion System
 
 The system includes robust automatic format conversion:
@@ -182,7 +188,21 @@ The system includes robust automatic format conversion:
 - Core model is in `audiobox-aesthetics/` subdirectory (standard Python package with pyproject.toml)
 - No traditional unit tests - validation through Docker builds and sample file processing
 - Container requires significant memory allocation for model inference
-- Test files in `test_files/` include various audio/video formats for validation
+
+## Test Infrastructure
+
+### Test Files Directory
+The `test_files/` directory contains diverse media samples for validation:
+- **Audio formats**: .aiff, .m4a, .mp3 (Thai music, speech samples, reference tracks)
+- **Video formats**: .MP4, .mp4 (drone footage, music videos)
+- **Total**: 10+ test files, 365MB+ of test media
+- **Purpose**: Format compatibility testing and processing validation
+
+### Available Test Files
+Notable test files include:
+- `speech_hanoi.mp3` - Speech sample for SQUIM testing
+- Various music and video files for audiobox-aesthetics testing
+- Mixed format samples to validate FFmpeg conversion pipeline
 
 ## Project Maintenance
 

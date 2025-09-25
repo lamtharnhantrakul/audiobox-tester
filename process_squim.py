@@ -38,13 +38,13 @@ class SquimProcessor:
         self.subjective_bundle = torchaudio.pipelines.SQUIM_SUBJECTIVE
         self.subjective_model = self.subjective_bundle.get_model().to(self.device)
 
+        # Expected sample rate (set this first)
+        self.sample_rate = self.objective_bundle.sample_rate
+        print(f"Expected sample rate: {self.sample_rate} Hz")
+
         # Create a default non-matching reference for MOS calculation
         # Using a simple synthetic tone as NMR since we don't have clean references
         self.default_nmr = self._create_default_nmr()
-
-        # Expected sample rate
-        self.sample_rate = self.objective_bundle.sample_rate
-        print(f"Expected sample rate: {self.sample_rate} Hz")
 
     def _get_device(self) -> torch.device:
         """Get the best available device."""
@@ -54,6 +54,26 @@ class SquimProcessor:
             return torch.device("mps")
         else:
             return torch.device("cpu")
+
+    def _create_default_nmr(self) -> torch.Tensor:
+        """Create a default non-matching reference for MOS calculation."""
+        # Create a simple synthetic speech-like signal
+        duration = 3.0  # 3 seconds
+        t = torch.linspace(0, duration, int(self.sample_rate * duration))
+
+        # Create a multi-frequency tone that resembles speech formants
+        f1, f2, f3 = 800, 1200, 2400  # Typical formant frequencies
+        signal = (torch.sin(2 * torch.pi * f1 * t) * 0.3 +
+                 torch.sin(2 * torch.pi * f2 * t) * 0.2 +
+                 torch.sin(2 * torch.pi * f3 * t) * 0.1)
+
+        # Add some amplitude modulation to make it more speech-like
+        envelope = torch.sin(2 * torch.pi * 4 * t) * 0.5 + 0.5
+        signal = signal * envelope
+
+        # Normalize and add channel dimension
+        signal = signal / torch.max(torch.abs(signal)) * 0.5
+        return signal.unsqueeze(0).to(self.device)
 
     def _load_audio(self, file_path: Path) -> Optional[Tuple[torch.Tensor, int]]:
         """Load audio file and handle format conversion."""
@@ -141,8 +161,12 @@ class SquimProcessor:
                 # Objective metrics: STOI, PESQ, SI-SDR
                 stoi_est, pesq_est, si_sdr_est = self.objective_model(waveform)
 
-                # Subjective metric: MOS
-                mos_est = self.subjective_model(waveform)
+                # Subjective metric: MOS (requires non-matching reference)
+                # Use the shorter of the two signals to avoid size mismatch
+                min_length = min(waveform.shape[1], self.default_nmr.shape[1])
+                waveform_trimmed = waveform[:, :min_length]
+                nmr_trimmed = self.default_nmr[:, :min_length]
+                mos_est = self.subjective_model(waveform_trimmed, nmr_trimmed)
 
             metrics = {
                 'file_path': str(file_path),
