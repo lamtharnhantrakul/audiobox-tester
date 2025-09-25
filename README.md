@@ -1,31 +1,34 @@
 # Audiobox Aesthetics Docker Setup
 
-This setup provides a Docker container for testing audiobox-aesthetics on your audio files.
+This setup provides a Docker container for testing audiobox-aesthetics on your audio and video files. It extends the original Meta audiobox-aesthetics model with Docker containerization, automatic format conversion, and support for video file processing.
 
 ## Prerequisites
 
 1. Docker Desktop must be installed and running
-2. Audio files in a directory (supports: .wav, .flac, .mp3, .m4a, .ogg)
+2. Audio or video files in a directory (supports audio: .wav, .flac, .mp3, .m4a, .ogg, .aac, .wma, .aiff, .au; video: .mp4, .mov, .avi, .mkv, .wmv, .flv, .webm, .m4v)
 
 ## Quick Start
 
 1. **Start Docker Desktop** (make sure it's running)
 
-2. **Run the analysis** on your audio files:
+2. **Run the analysis** on your audio or video files:
    ```bash
-   ./run_audiobox.sh /path/to/your/audio/files [output_filename.txt]
+   ./run_single_file.sh /path/to/media/file.mp4 [output_filename.txt]
+   ./run_test_files.sh [output_filename.txt]
    ```
 
-   Example:
+   Examples:
    ```bash
-   ./run_audiobox.sh ~/Music/samples results.txt
+   ./run_single_file.sh ~/Music/song.mp3 results.txt
+   ./run_single_file.sh ~/Videos/movie.mp4 video_analysis.txt
+   ./run_test_files.sh batch_results.txt
    ```
 
 3. **View results** in the generated text file
 
 ## What the Analysis Provides
 
-The tool analyzes each audio file and provides 4 aesthetic metrics:
+The tool analyzes audio content from both audio and video files and provides 4 aesthetic metrics:
 
 - **Content Enjoyment (CE)**: How enjoyable the content is
 - **Content Usefulness (CU)**: How useful the content is
@@ -77,12 +80,23 @@ If you prefer to run Docker commands manually:
 
 - **Docker daemon not running**: Start Docker Desktop
 - **Permission denied**: Make sure the script is executable with `chmod +x run_audiobox.sh`
-- **No audio files found**: Check that your directory contains supported audio formats
+- **No media files found**: Check that your directory contains supported audio or video formats
 - **Out of memory**: The model requires significant memory; ensure Docker has enough RAM allocated
+
+## Key Features
+
+- **Docker containerization**: Eliminates dependency management and ensures consistent execution
+- **Video file support**: Automatically extracts audio from video files using FFmpeg
+- **Format conversion**: Handles unsupported audio formats with automatic FFmpeg fallback
+- **Progress tracking**: Real-time progress bars with file count and ETA
+- **Batch processing**: Process entire directories or single files
+- **Clean output formatting**: Structured text results with clear metrics
 
 ## Files in This Setup
 
-- `Dockerfile`: Container definition with audiobox-aesthetics and dependencies
-- `process_audio.py`: Python script that processes audio files and generates metrics
-- `run_audiobox.sh`: Convenience script to build and run the container
-- `audiobox-aesthetics/`: Cloned repository with the original codebase
+- `Dockerfile`: Container definition with audiobox-aesthetics, FFmpeg, and dependencies
+- `process_audio.py`: Python script that processes audio/video files with format conversion
+- `run_single_file.sh`: Process individual audio or video files
+- `run_test_files.sh`: Batch process all files in test_files directory
+- `cleanup.sh`: Clean up generated test files and Docker artifacts
+- `audiobox-aesthetics/`: Cloned repository with the original Meta codebase
