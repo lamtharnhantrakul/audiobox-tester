@@ -33,44 +33,25 @@ class UTMOSv2Processor:
 
     def __init__(self):
         """Initialize UTMOSv2 model."""
-        self.device = self._get_device()
-        print(f"Using device: {self.device}")
-
         print("Loading UTMOSv2 model...")
         try:
-            # Force CPU mode to avoid CUDA compatibility issues in Docker
+            # UTMOSv2 handles device selection internally
             self.model = utmosv2.create_model(pretrained=True)
-            if hasattr(self.model, 'to'):
-                self.model = self.model.to('cpu')
             print("✅ UTMOSv2 model loaded successfully")
         except Exception as e:
             print(f"❌ Failed to load UTMOSv2 model: {e}")
-            # Try alternative initialization approaches
-            print("🔄 Trying alternative model initialization...")
-            try:
-                # Set environment variable to force CPU mode
-                os.environ['CUDA_VISIBLE_DEVICES'] = ''
-                torch.cuda.is_available = lambda: False
-                self.model = utmosv2.create_model(pretrained=True)
-                if hasattr(self.model, 'to'):
-                    self.model = self.model.to('cpu')
-                print("✅ UTMOSv2 model loaded successfully (CPU mode)")
-            except Exception as e2:
-                print(f"❌ Alternative initialization also failed: {e2}")
-                raise
+            print("💡 Make sure UTMOSv2 is installed: pip install git+https://github.com/sarulab-speech/UTMOSv2.git")
+            raise
 
-    def _get_device(self) -> torch.device:
-        """Get the best available device (forced to CPU for Docker compatibility)."""
-        # Force CPU mode to avoid CUDA compatibility issues in Docker
-        return torch.device("cpu")
 
     def _extract_audio_from_video(self, file_path: Path) -> Optional[Path]:
         """Extract audio from video file using FFmpeg."""
         try:
             import subprocess
 
-            # Create temporary audio file
-            temp_audio = file_path.parent / f"{file_path.stem}_temp_audio.wav"
+            # Create temporary audio file in writable /tmp directory
+            import tempfile
+            temp_audio = Path(tempfile.mkdtemp()) / f"{file_path.stem}_temp_audio.wav"
 
             print(f"🎥 Extracting audio from video: {file_path.name}")
 
@@ -99,8 +80,9 @@ class UTMOSv2Processor:
         try:
             import subprocess
 
-            # Create temporary WAV file
-            temp_wav = file_path.parent / f"{file_path.stem}_temp_converted.wav"
+            # Create temporary WAV file in writable /tmp directory
+            import tempfile
+            temp_wav = Path(tempfile.mkdtemp()) / f"{file_path.stem}_temp_converted.wav"
 
             print(f"🔄 Converting audio format: {file_path.name}")
 
@@ -118,6 +100,8 @@ class UTMOSv2Processor:
                 return temp_wav
             else:
                 print(f"❌ Failed to convert {file_path.name}")
+                print(f"❌ FFmpeg stdout: {result.stdout}")
+                print(f"❌ FFmpeg stderr: {result.stderr}")
                 return None
 
         except Exception as e:
@@ -139,68 +123,29 @@ class UTMOSv2Processor:
                 return None
             processing_path = temp_file_path
         elif file_path.suffix.lower() in audio_extensions:
-            # Try direct processing first, fallback to conversion if needed
-            processing_path = file_path
+            # Convert to WAV if not already WAV (UTMOSv2 expects WAV files)
+            if file_path.suffix.lower() != '.wav':
+                temp_file_path = self._convert_audio_format(file_path)
+                if temp_file_path is None:
+                    return None
+                processing_path = temp_file_path
+            else:
+                processing_path = file_path
         else:
             print(f"❌ Unsupported file format: {file_path.suffix}")
             return None
 
         try:
-            # Set environment variables to force CPU mode before prediction
-            import os
-            original_cuda_devices = os.environ.get('CUDA_VISIBLE_DEVICES', '')
-            os.environ['CUDA_VISIBLE_DEVICES'] = ''
+            # Use the correct UTMOSv2 API - predict method with input_path parameter
+            print(f"🔍 Predicting MOS for: {processing_path.name}")
 
-            # Try to predict MOS using UTMOSv2
-            with torch.no_grad():
-                # Ensure model is on CPU
-                if hasattr(self.model, 'to'):
-                    self.model = self.model.to('cpu')
-
-                # UTMOSv2 API might use different method names
-                if hasattr(self.model, 'predict'):
-                    mos_score = self.model.predict(input_path=str(processing_path))
-                elif hasattr(self.model, '__call__'):
-                    # Try direct call with file path
-                    mos_score = self.model(str(processing_path))
-                else:
-                    # Try to load audio and use the model directly
-                    import torchaudio
-                    waveform, sample_rate = torchaudio.load(str(processing_path))
-                    # Resample to 16kHz if needed
-                    if sample_rate != 16000:
-                        resampler = torchaudio.transforms.Resample(sample_rate, 16000)
-                        waveform = resampler(waveform)
-                    mos_score = self.model(waveform)
+            # UTMOSv2 expects the predict method with input_path parameter
+            # Force CPU usage by passing device parameter
+            mos_score = self.model.predict(input_path=str(processing_path), device='cpu')
 
             if mos_score is None:
-                # If direct processing failed, try format conversion
-                if processing_path == file_path:  # Only if we haven't already converted
-                    print(f"🔄 Direct processing failed, trying format conversion...")
-                    temp_file_path = self._convert_audio_format(file_path)
-                    if temp_file_path is None:
-                        return None
-                    processing_path = temp_file_path
-                    with torch.no_grad():
-                        # Try the same API approach as before
-                        if hasattr(self.model, 'predict'):
-                            mos_score = self.model.predict(input_path=str(processing_path))
-                        elif hasattr(self.model, '__call__'):
-                            mos_score = self.model(str(processing_path))
-                        else:
-                            import torchaudio
-                            waveform, sample_rate = torchaudio.load(str(processing_path))
-                            if sample_rate != 16000:
-                                resampler = torchaudio.transforms.Resample(sample_rate, 16000)
-                                waveform = resampler(waveform)
-                            mos_score = self.model(waveform)
-
-                if mos_score is None:
-                    print(f"❌ UTMOSv2 prediction failed for {file_path.name}")
-                    return None
-
-            # Restore original CUDA_VISIBLE_DEVICES
-            os.environ['CUDA_VISIBLE_DEVICES'] = original_cuda_devices
+                print(f"❌ UTMOSv2 prediction returned None for {file_path.name}")
+                return None
 
             result = {
                 'file_path': str(file_path),
@@ -212,6 +157,9 @@ class UTMOSv2Processor:
 
         except Exception as e:
             print(f"❌ Error processing {file_path.name}: {e}")
+            # Print more detailed error information for debugging
+            import traceback
+            print(f"❌ Detailed error: {traceback.format_exc()}")
             return None
 
         finally:

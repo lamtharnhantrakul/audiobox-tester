@@ -1,0 +1,150 @@
+# Production-Grade Multi-Stage Dockerfile for Audio Quality Assessment Toolkit
+# Optimized for Google Cloud Run, AWS ECS, and Kubernetes deployments
+# Supports audiobox-aesthetics, SQUIM, and UTMOSv2 assessment models
+
+# =============================================================================
+# Stage 1: Base Dependencies and System Setup
+# =============================================================================
+FROM python:3.10-slim as base
+
+# Metadata following OCI specification
+LABEL maintainer="Audio Quality Team <team@example.com>" \
+      version="1.0.0" \
+      description="Production audio quality assessment toolkit" \
+      org.opencontainers.image.title="Audio Quality Toolkit" \
+      org.opencontainers.image.description="Multi-model audio assessment suite" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.vendor="Audio Quality Team" \
+      org.opencontainers.image.licenses="MIT"
+
+# Set environment variables for production
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# Install system dependencies with specific versions for reproducibility
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Audio processing libraries
+    ffmpeg=7:5.1.* \
+    libsndfile1=1.0.* \
+    libsndfile1-dev=1.0.* \
+    # Git for package installation
+    git=1:2.39.* \
+    # Network utilities
+    wget=1.21.* \
+    curl=7.88.* \
+    # Build tools (minimal set)
+    build-essential=12.9.* \
+    pkg-config=1.8.* \
+    # Clean up to reduce layer size
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* /var/tmp/*
+
+# =============================================================================
+# Stage 2: Python Dependencies Installation
+# =============================================================================
+FROM base as dependencies
+
+# Create non-root user for security
+RUN groupadd --gid 1000 audiouser \
+    && useradd --uid 1000 --gid audiouser --shell /bin/bash --create-home audiouser
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt setup.py ./
+COPY src/ ./src/
+
+# Install Python dependencies with optimizations
+RUN pip install --no-cache-dir --upgrade pip==23.3.* setuptools==69.0.* wheel==0.42.* \
+    # Install PyTorch CPU-only version for smaller image
+    && pip install --no-cache-dir torch==2.2.0+cpu torchaudio==2.2.0+cpu -f https://download.pytorch.org/whl/torch_stable.html \
+    # Install other dependencies
+    && pip install --no-cache-dir -r requirements.txt \
+    # Install package in development mode
+    && pip install -e . \
+    # Clean up pip cache
+    && pip cache purge
+
+# =============================================================================
+# Stage 3: Model Installation and Setup
+# =============================================================================
+FROM dependencies as models
+
+# Copy audiobox-aesthetics model
+COPY audiobox-aesthetics/ ./audiobox-aesthetics/
+RUN cd audiobox-aesthetics && pip install --no-cache-dir -e .
+
+# Install UTMOSv2 with timeout for reliability
+RUN pip install --no-cache-dir --timeout=300 \
+    git+https://github.com/sarulab-speech/UTMOSv2.git
+
+# Pre-download and cache model checkpoints in build stage
+RUN python -c "import utmosv2; utmosv2.create_model(pretrained=True)" || true
+
+# =============================================================================
+# Stage 4: Application Layer
+# =============================================================================
+FROM models as application
+
+# Copy application code
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+
+# Copy and set up shell scripts with proper permissions
+COPY run_*.sh cleanup.sh ./
+RUN chmod +x *.sh
+
+# Create directory structure
+RUN mkdir -p /app/{input,output,logs,cache} \
+    && chown -R audiouser:audiouser /app
+
+# =============================================================================
+# Stage 5: Production Runtime
+# =============================================================================
+FROM application as runtime
+
+# Switch to non-root user
+USER audiouser
+
+# Set environment variables for runtime
+ENV PYTHONPATH=/app/src \
+    TORCH_HOME=/app/cache \
+    TRANSFORMERS_CACHE=/app/cache \
+    HF_HOME=/app/cache \
+    TMPDIR=/tmp \
+    # Disable CUDA for CPU-only deployment
+    CUDA_VISIBLE_DEVICES="" \
+    # Configure logging
+    LOG_LEVEL=INFO \
+    LOG_FORMAT=json
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import torch; import utmosv2; import sys; sys.exit(0)" || exit 1
+
+# Default working directory for volume mounts
+WORKDIR /app
+
+# Expose port for potential web interface
+EXPOSE 8080
+
+# Default entrypoint for audiobox-aesthetics
+ENTRYPOINT ["python", "/app/src/processors/audiobox_processor.py"]
+
+# Default command processes input directory
+CMD ["/app/input", "/app/output/results.txt"]
+
+# =============================================================================
+# Multi-Architecture Build Instructions
+# =============================================================================
+# Build commands:
+# docker buildx build --platform linux/amd64,linux/arm64 -t audio-quality-toolkit:latest .
+# docker build --target runtime -t audio-quality-toolkit:production .
+# docker build --target dependencies -t audio-quality-toolkit:base .

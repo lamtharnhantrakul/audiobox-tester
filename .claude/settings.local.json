@@ -23,7 +23,12 @@
       "WebFetch(domain:docs.pytorch.org)",
       "Bash(./run_squim_single_file.sh:*)",
       "Read(//Users/yaboihanoi/code/audiobox_test/**)",
-      "Bash(./run_squim_directory.sh:*)"
+      "Bash(./run_squim_directory.sh:*)",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(./run_utmosv2_single_file.sh:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

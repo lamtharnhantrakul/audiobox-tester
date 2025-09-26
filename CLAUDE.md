@@ -31,8 +31,9 @@ All three systems provide containerized solutions for analyzing audio/video file
 
 ### UTMOSv2 Speech Naturalness System
 - **Entry point scripts**: `run_utmosv2_single_file.sh` and `run_utmosv2_directory.sh` - Shell scripts for speech naturalness analysis
-- **Python wrapper**: `process_utmosv2.py` - UTMOSv2 processor with automatic format conversion
+- **Python wrapper**: `process_utmosv2.py` - UTMOSv2 processor with automatic format conversion and smart device detection
 - **Core model**: University of Tokyo's UTMOSv2 pretrained model (achieved 1st place in 7/16 VoiceMOS Challenge 2024 metrics)
+- **Device support**: Automatic GPU detection with CPU fallback - uses CUDA if available, otherwise falls back to CPU mode
 
 ### Common Features
 - **Format compatibility**: Automatic conversion system handles both audio and video files
@@ -201,8 +202,12 @@ audio-aes input.jsonl --batch-size 100 --remote --array 5 --job-dir $HOME/slurm_
 - **Purpose**: Predicts naturalness MOS for synthetic speech assessment
 - **Architecture**: Transfer learning from image classification models adapted for speech
 - **Processing**: Audio converted to 16kHz mono WAV format automatically
-- **Checkpoints**: Pre-trained model auto-downloaded from GitHub repository
-- **Device support**: CUDA, MPS (Apple Silicon), CPU fallback
+- **Checkpoints**: Pre-trained model auto-downloaded from GitHub repository (781MB)
+- **Device support**: Intelligent GPU detection with automatic CPU fallback
+  - **CUDA**: Uses GPU if CUDA is available and functional
+  - **MPS**: Uses Apple Silicon GPU if available and functional
+  - **CPU**: Automatically falls back to CPU if no GPU detected or GPU fails
+  - **Smart detection**: Tests GPU functionality before use, provides clear feedback
 - **Performance**: Achieved 1st place in 7/16 metrics at VoiceMOS Challenge 2024
 
 #### UTMOSv2 Metrics Explained
