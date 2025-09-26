@@ -15,14 +15,14 @@ WORKDIR /app
 # Copy the audiobox-aesthetics repository
 COPY audiobox-aesthetics /app/audiobox-aesthetics
 
-# Install common audio processing packages
-RUN pip install --no-cache-dir soundfile tqdm torch torchaudio
+# Copy requirements file for dependency installation
+COPY requirements.txt /app/
+
+# Install all dependencies from requirements.txt (includes UTMOSv2 and additional dependencies)
+RUN pip install --no-cache-dir --timeout=120 -r requirements.txt
 
 # Install audiobox-aesthetics (includes additional ML dependencies)
 RUN cd audiobox-aesthetics && pip install -e .
-
-# Install UTMOSv2 for speech quality assessment with extended timeout
-RUN pip install --timeout=120 --no-cache-dir git+https://github.com/sarulab-speech/UTMOSv2.git
 
 # Create directories for input and output
 RUN mkdir -p /app/input /app/output
@@ -31,7 +31,7 @@ RUN mkdir -p /app/input /app/output
 COPY process_audiobox.py /app/
 COPY process_squim.py /app/
 COPY process_utmosv2.py /app/
-RUN chmod +x /app/process_squim.py /app/process_utmosv2.py
+RUN chmod +x /app/process_audiobox.py /app/process_squim.py /app/process_utmosv2.py
 
 # Default entrypoint (can be overridden)
 ENTRYPOINT ["python", "/app/process_audiobox.py"]

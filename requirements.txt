@@ -1,0 +1,13 @@
+# Core Dependencies for Audio Processing
+torch>=2.2.0
+torchaudio>=2.2.0
+soundfile>=0.12.1
+tqdm>=4.66.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Audio Processing
+ffmpeg-python>=0.2.0
+
+# Model Dependencies - UTMOSv2 for speech quality assessment
+git+https://github.com/sarulab-speech/UTMOSv2.git
