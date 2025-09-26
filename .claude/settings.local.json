@@ -22,7 +22,8 @@
       "Bash(mv:*)",
       "WebFetch(domain:docs.pytorch.org)",
       "Bash(./run_squim_single_file.sh:*)",
-      "Read(//Users/yaboihanoi/code/audiobox_test/**)"
+      "Read(//Users/yaboihanoi/code/audiobox_test/**)",
+      "Bash(./run_squim_directory.sh:*)"
     ],
     "deny": [],
     "ask": []
