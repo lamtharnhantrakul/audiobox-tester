@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Script to run SQUIM speech quality assessment on all audio files in the test_files directory
-# Usage: ./run_squim_directory.sh [output_filename] [--rebuild]
+# Script to run UTMOSv2 speech quality assessment on all audio files in the test_files directory
+# Usage: ./run_utmosv2_directory.sh [output_filename] [--rebuild]
 
 set -e
 
@@ -22,9 +22,9 @@ done
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="$SCRIPT_DIR/test_files"
-OUTPUT_FILE="${ARGS[0]:-squim_test_results.txt}"
+OUTPUT_FILE="${ARGS[0]:-utmosv2_test_results.txt}"
 
-echo "Running SQUIM speech quality assessment on test directory..."
+echo "Running UTMOSv2 speech quality assessment on test directory..."
 echo "Test directory: $TEST_DIR"
 echo "Output file: $OUTPUT_FILE"
 
@@ -61,7 +61,7 @@ if $REBUILD; then
     echo "🔄 Force rebuild requested - rebuilding Docker container..."
     BUILD_REQUIRED=true
 elif ! docker image inspect $CONTAINER_NAME >/dev/null 2>&1; then
-    echo "🏗️  Docker image not found - building unified container with SQUIM..."
+    echo "🏗️  Docker image not found - building unified container with UTMOSv2..."
     BUILD_REQUIRED=true
 else
     echo "✅ Using existing Docker image '$CONTAINER_NAME' (use --rebuild to force rebuild)"
@@ -71,16 +71,16 @@ if $BUILD_REQUIRED; then
     docker build -t $CONTAINER_NAME .
 fi
 
-echo "Running SQUIM assessment on media files in: $TEST_DIR"
+echo "Running UTMOSv2 assessment on media files in: $TEST_DIR"
 echo "Output will be saved to: $OUTPUT_DIR/$OUTPUT_FILE"
 
-# Run the container with SQUIM entrypoint
+# Run the container with UTMOSv2 entrypoint
 docker run --rm \
     --entrypoint python \
     -v "$TEST_DIR:/app/input:ro" \
     -v "$OUTPUT_DIR:/app/output" \
-    $CONTAINER_NAME /app/process_squim.py /app/input "/app/output/$OUTPUT_FILE"
+    $CONTAINER_NAME /app/process_utmosv2.py /app/input "/app/output/$OUTPUT_FILE"
 
 echo "Processing complete! Results saved to: $OUTPUT_DIR/$OUTPUT_FILE"
 
-echo "SQUIM assessment complete! Check $OUTPUT_FILE for speech quality metrics."
+echo "UTMOSv2 assessment complete! Check $OUTPUT_FILE for speech naturalness metrics."

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Script to run audiobox-aesthetics on a single audio file
-# Usage: ./run_audiobox_single_file.sh <path_to_audio_file> [output_filename] [--rebuild]
+# Script to run UTMOSv2 speech quality assessment on a single audio file
+# Usage: ./run_utmosv2_single_file.sh <path_to_audio_file> [output_filename] [--rebuild]
 
 set -e
 
@@ -28,8 +28,8 @@ done
 # Check arguments
 if [ ${#ARGS[@]} -lt 1 ]; then
     echo "Usage: $0 <path_to_audio_file> [output_filename] [--rebuild]"
-    echo "Example: $0 /path/to/song.wav results.txt"
-    echo "Example: $0 /path/to/song.wav results.txt --rebuild"
+    echo "Example: $0 /path/to/speech.wav utmosv2_results.txt"
+    echo "Example: $0 /path/to/speech.wav utmosv2_results.txt --rebuild"
     echo ""
     echo "Options:"
     echo "  --rebuild    Force rebuild of Docker container (use when codebase changes)"
@@ -37,11 +37,16 @@ if [ ${#ARGS[@]} -lt 1 ]; then
     echo "Supported formats:"
     echo "  Audio: .wav, .flac, .mp3, .m4a, .ogg, .aac, .wma, .aiff, .au"
     echo "  Video: .mp4, .mov, .avi, .mkv, .wmv, .flv, .webm, .m4v (audio will be extracted)"
+    echo ""
+    echo "UTMOSv2 Metrics:"
+    echo "  - MOS (Mean Opinion Score for synthetic speech naturalness)"
+    echo "  - Higher scores indicate more natural-sounding speech"
+    echo "  - Achieved 1st place in 7/16 metrics at VoiceMOS Challenge 2024"
     exit 1
 fi
 
 INPUT_FILE="${ARGS[0]}"
-OUTPUT_FILE="${ARGS[1]:-single_file_results.txt}"
+OUTPUT_FILE="${ARGS[1]:-single_file_utmosv2_results.txt}"
 
 # Check if input file exists
 if [ ! -f "$INPUT_FILE" ]; then
@@ -63,7 +68,7 @@ if $REBUILD; then
     echo "🔄 Force rebuild requested - rebuilding Docker container..."
     BUILD_REQUIRED=true
 elif ! docker image inspect $CONTAINER_NAME >/dev/null 2>&1; then
-    echo "🏗️  Docker image not found - building unified container..."
+    echo "🏗️  Docker image not found - building unified container with UTMOSv2..."
     BUILD_REQUIRED=true
 else
     echo "✅ Using existing Docker image '$CONTAINER_NAME' (use --rebuild to force rebuild)"
@@ -77,15 +82,16 @@ echo "Processing single file: $INPUT_FILE"
 echo "Output will be saved to: $OUTPUT_DIR/$OUTPUT_FILE"
 
 # Create temporary directory with just the single file
-TEMP_DIR="$(pwd)/temp_single_$(date +%s)"
+TEMP_DIR="$(pwd)/temp_utmosv2_$(date +%s)"
 mkdir -p "$TEMP_DIR"
 cp "$INPUT_FILE" "$TEMP_DIR/"
 
-# Run the container with audiobox-aesthetics (default entrypoint)
+# Run the container with UTMOSv2 entrypoint
 docker run --rm \
+    --entrypoint python \
     -v "$TEMP_DIR:/app/input:ro" \
     -v "$OUTPUT_DIR:/app/output" \
-    $CONTAINER_NAME /app/input "/app/output/$OUTPUT_FILE"
+    $CONTAINER_NAME /app/process_utmosv2.py /app/input "/app/output/$OUTPUT_FILE"
 
 # Clean up
 rm -rf "$TEMP_DIR"

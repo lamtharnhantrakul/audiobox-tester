@@ -4,19 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Docker-based audio analysis toolkit that provides two complementary approaches to audio assessment:
+This is a Docker-based audio analysis toolkit that provides three complementary approaches to audio assessment:
 
 1. **Audiobox-Aesthetics**: Meta's model analyzing 4 aesthetic dimensions - Content Enjoyment (CE), Content Usefulness (CU), Production Complexity (PC), and Production Quality (PQ)
 2. **SQUIM**: TorchAudio's speech quality assessment providing objective metrics (STOI, PESQ, SI-SDR) and subjective metrics (MOS)
+3. **UTMOSv2**: University of Tokyo's speech naturalness assessment providing MOS scores for synthetic speech quality
 
-Both systems provide containerized solutions for analyzing audio/video files with automatic format conversion.
+All three systems provide containerized solutions for analyzing audio/video files with automatic format conversion.
 
 ## Architecture
 
 ### Unified Docker Architecture
-- **Single container**: Contains both audiobox-aesthetics and SQUIM dependencies
+- **Single container**: Contains audiobox-aesthetics, SQUIM, and UTMOSv2 dependencies
 - **Base image**: Python 3.10-slim with PyTorch, TorchAudio, and audio processing tools
-- **Flexible entrypoint**: Default audiobox-aesthetics, override for SQUIM processing
+- **Flexible entrypoint**: Default audiobox-aesthetics, override for SQUIM or UTMOSv2 processing
 
 ### Audiobox-Aesthetics System
 - **Entry point scripts**: `run_audiobox_single_file.sh` and `run_audiobox_directory.sh` - Shell scripts for aesthetic analysis
@@ -27,6 +28,11 @@ Both systems provide containerized solutions for analyzing audio/video files wit
 - **Entry point scripts**: `run_squim_single_file.sh` and `run_squim_directory.sh` - Shell scripts for speech quality analysis
 - **Python wrapper**: `process_squim.py` - SQUIM processor with automatic format conversion and synthetic NMR
 - **Core models**: TorchAudio's SQUIM_OBJECTIVE and SQUIM_SUBJECTIVE pretrained models
+
+### UTMOSv2 Speech Naturalness System
+- **Entry point scripts**: `run_utmosv2_single_file.sh` and `run_utmosv2_directory.sh` - Shell scripts for speech naturalness analysis
+- **Python wrapper**: `process_utmosv2.py` - UTMOSv2 processor with automatic format conversion
+- **Core model**: University of Tokyo's UTMOSv2 pretrained model (achieved 1st place in 7/16 VoiceMOS Challenge 2024 metrics)
 
 ### Common Features
 - **Format compatibility**: Automatic conversion system handles both audio and video files
@@ -62,6 +68,20 @@ Both systems provide containerized solutions for analyzing audio/video files wit
 ./run_squim_directory.sh squim_results.txt
 ```
 
+### UTMOSv2 Speech Naturalness Commands
+```bash
+# Process single audio/video file for speech naturalness assessment
+./run_utmosv2_single_file.sh /path/to/speech.wav [output_filename.txt]
+
+# Process all files in test directory for speech naturalness analysis
+./run_utmosv2_directory.sh [output_filename.txt]
+
+# Examples
+./run_utmosv2_single_file.sh test_files/speech_hanoi.mp3 naturalness_score.txt
+./run_utmosv2_single_file.sh test_files/synthetic_speech.mp4 speech_naturalness.txt
+./run_utmosv2_directory.sh utmosv2_results.txt
+```
+
 ### Maintenance Commands
 ```bash
 # Clean up generated test files and artifacts
@@ -87,6 +107,13 @@ docker run --rm \
   -v "/path/to/media:/app/input:ro" \
   -v "$(pwd):/app/output" \
   audiobox-squim /app/process_squim.py /app/input "/app/output/squim_results.txt"
+
+# UTMOSv2 Speech Naturalness (override entrypoint)
+docker run --rm \
+  --entrypoint python \
+  -v "/path/to/media:/app/input:ro" \
+  -v "$(pwd):/app/output" \
+  audiobox-squim /app/process_utmosv2.py /app/input "/app/output/utmosv2_results.txt"
 
 # Test containers (legacy)
 docker build -f Dockerfile.test -t audiobox-aesthetics-test .
@@ -138,6 +165,10 @@ audio-aes input.jsonl --batch-size 100 --remote --array 5 --job-dir $HOME/slurm_
 - TorchAudio 2.6.0+ (includes SQUIM models)
 - Pre-trained SQUIM models (auto-downloaded from TorchAudio)
 
+### UTMOSv2 Specific
+- UTMOSv2 package (University of Tokyo's model)
+- Pre-trained UTMOSv2 models (auto-downloaded from GitHub)
+
 ## Model Architecture
 
 ### Audiobox-Aesthetics Model
@@ -165,6 +196,20 @@ audio-aes input.jsonl --batch-size 100 --remote --array 5 --job-dir $HOME/slurm_
 - **Synthetic NMR**: Uses generated multi-frequency tone (800Hz, 1200Hz, 2400Hz) as default reference
 - **MOS Interpretation**: MOS scores may appear lower due to synthetic reference; focus on relative comparisons
 - **Reference-Free Objective Metrics**: STOI, PESQ, and SI-SDR are reference-free and provide reliable absolute scores
+
+### UTMOSv2 Speech Naturalness Model
+- **Purpose**: Predicts naturalness MOS for synthetic speech assessment
+- **Architecture**: Transfer learning from image classification models adapted for speech
+- **Processing**: Audio converted to 16kHz mono WAV format automatically
+- **Checkpoints**: Pre-trained model auto-downloaded from GitHub repository
+- **Device support**: CUDA, MPS (Apple Silicon), CPU fallback
+- **Performance**: Achieved 1st place in 7/16 metrics at VoiceMOS Challenge 2024
+
+#### UTMOSv2 Metrics Explained
+- **MOS** (1-5): Mean Opinion Score for synthetic speech naturalness
+- **Higher scores**: Indicate more natural-sounding synthetic speech
+- **Use case**: Ideal for evaluating text-to-speech systems and voice synthesis quality
+- **Comparison**: Unlike SQUIM's MOS (general quality), UTMOSv2 specifically measures naturalness
 
 ## Format Conversion System
 
@@ -256,6 +301,29 @@ Average STOI: 0.874
 Average PESQ: 3.182
 Average SI-SDR: 11.923 dB
 Average MOS: 4.067
+```
+
+### UTMOSv2 Speech Naturalness Results
+```
+Speech Quality Assessment Results (UTMOSv2)
+==================================================
+
+File: example.wav
+Path: /app/input/example.wav
+Speech Naturalness Metrics:
+  MOS (Mean Opinion Score): 3.847
+
+------------------------------
+
+Summary Statistics:
+====================
+Total files processed: 5
+Average MOS: 3.924
+Minimum MOS: 3.102
+Maximum MOS: 4.583
+
+Note: UTMOSv2 predicts naturalness of synthetic speech.
+Higher MOS scores indicate more natural-sounding speech.
 ```
 
 ## Progress Display

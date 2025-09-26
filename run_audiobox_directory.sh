@@ -1,14 +1,28 @@
 #!/bin/bash
 
 # Script to run audiobox-aesthetics on all audio files in the test_files directory
-# This is a convenience wrapper around run_audiobox.sh for testing purposes
+# Usage: ./run_audiobox_directory.sh [output_filename] [--rebuild]
 
 set -e
+
+# Parse arguments for rebuild flag
+REBUILD=false
+ARGS=()
+for arg in "$@"; do
+    case $arg in
+        --rebuild)
+            REBUILD=true
+            ;;
+        *)
+            ARGS+=("$arg")
+            ;;
+    esac
+done
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="$SCRIPT_DIR/test_files"
-OUTPUT_FILE="${1:-test_results.txt}"
+OUTPUT_FILE="${ARGS[0]:-test_results.txt}"
 
 echo "Running audiobox-aesthetics on test directory..."
 echo "Test directory: $TEST_DIR"
@@ -39,17 +53,32 @@ fi
 TEST_DIR="$(cd "$TEST_DIR" && pwd)"
 OUTPUT_DIR="$(pwd)"
 
-echo "Building audiobox-aesthetics Docker container..."
-docker build -t audiobox-aesthetics .
+# Check if container exists and decide whether to build
+CONTAINER_NAME="audiobox-squim"
+BUILD_REQUIRED=false
+
+if $REBUILD; then
+    echo "🔄 Force rebuild requested - rebuilding Docker container..."
+    BUILD_REQUIRED=true
+elif ! docker image inspect $CONTAINER_NAME >/dev/null 2>&1; then
+    echo "🏗️  Docker image not found - building unified container..."
+    BUILD_REQUIRED=true
+else
+    echo "✅ Using existing Docker image '$CONTAINER_NAME' (use --rebuild to force rebuild)"
+fi
+
+if $BUILD_REQUIRED; then
+    docker build -t $CONTAINER_NAME .
+fi
 
 echo "Running audiobox-aesthetics on media files in: $TEST_DIR"
 echo "Output will be saved to: $OUTPUT_DIR/$OUTPUT_FILE"
 
-# Run the container with volume mounts
+# Run the container with audiobox-aesthetics (default entrypoint)
 docker run --rm \
     -v "$TEST_DIR:/app/input:ro" \
     -v "$OUTPUT_DIR:/app/output" \
-    audiobox-aesthetics /app/input "/app/output/$OUTPUT_FILE"
+    $CONTAINER_NAME /app/input "/app/output/$OUTPUT_FILE"
 
 echo "Processing complete! Results saved to: $OUTPUT_DIR/$OUTPUT_FILE"
 

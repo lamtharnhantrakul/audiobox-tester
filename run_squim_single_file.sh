@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to run SQUIM speech quality assessment on a single audio file
-# Usage: ./run_squim.sh <path_to_audio_file> [output_filename]
+# Usage: ./run_squim_single_file.sh <path_to_audio_file> [output_filename] [--rebuild]
 
 set -e
 
@@ -11,10 +11,28 @@ if ! docker info >/dev/null 2>&1; then
     exit 1
 fi
 
+# Parse arguments for rebuild flag
+REBUILD=false
+ARGS=()
+for arg in "$@"; do
+    case $arg in
+        --rebuild)
+            REBUILD=true
+            ;;
+        *)
+            ARGS+=("$arg")
+            ;;
+    esac
+done
+
 # Check arguments
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <path_to_audio_file> [output_filename]"
+if [ ${#ARGS[@]} -lt 1 ]; then
+    echo "Usage: $0 <path_to_audio_file> [output_filename] [--rebuild]"
     echo "Example: $0 /path/to/speech.wav squim_results.txt"
+    echo "Example: $0 /path/to/speech.wav squim_results.txt --rebuild"
+    echo ""
+    echo "Options:"
+    echo "  --rebuild    Force rebuild of Docker container (use when codebase changes)"
     echo ""
     echo "Supported formats:"
     echo "  Audio: .wav, .flac, .mp3, .m4a, .ogg, .aac, .wma, .aiff, .au"
@@ -28,8 +46,8 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-INPUT_FILE="$1"
-OUTPUT_FILE="${2:-single_file_squim_results.txt}"
+INPUT_FILE="${ARGS[0]}"
+OUTPUT_FILE="${ARGS[1]:-single_file_squim_results.txt}"
 
 # Check if input file exists
 if [ ! -f "$INPUT_FILE" ]; then
@@ -43,8 +61,23 @@ INPUT_DIR="$(dirname "$INPUT_FILE")"
 FILENAME="$(basename "$INPUT_FILE")"
 OUTPUT_DIR="$(pwd)"
 
-echo "Building unified Docker container..."
-docker build -t audiobox-squim .
+# Check if container exists and decide whether to build
+CONTAINER_NAME="audiobox-squim"
+BUILD_REQUIRED=false
+
+if $REBUILD; then
+    echo "🔄 Force rebuild requested - rebuilding Docker container..."
+    BUILD_REQUIRED=true
+elif ! docker image inspect $CONTAINER_NAME >/dev/null 2>&1; then
+    echo "🏗️  Docker image not found - building unified container with SQUIM..."
+    BUILD_REQUIRED=true
+else
+    echo "✅ Using existing Docker image '$CONTAINER_NAME' (use --rebuild to force rebuild)"
+fi
+
+if $BUILD_REQUIRED; then
+    docker build -t $CONTAINER_NAME .
+fi
 
 echo "Processing single file: $INPUT_FILE"
 echo "Output will be saved to: $OUTPUT_DIR/$OUTPUT_FILE"
@@ -59,7 +92,7 @@ docker run --rm \
     --entrypoint python \
     -v "$TEMP_DIR:/app/input:ro" \
     -v "$OUTPUT_DIR:/app/output" \
-    audiobox-squim /app/process_squim.py /app/input "/app/output/$OUTPUT_FILE"
+    $CONTAINER_NAME /app/process_squim.py /app/input "/app/output/$OUTPUT_FILE"
 
 # Clean up
 rm -rf "$TEMP_DIR"
